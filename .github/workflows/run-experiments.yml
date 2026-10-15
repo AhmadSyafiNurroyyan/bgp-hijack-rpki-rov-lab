@@ -1,0 +1,141 @@
+# Deploys the lab, runs scenarios S0-S2, asserts the results with pytest, publishes the
+# evidence, and always destroys the topology. Sequence follows docs/automation-design.md (section 7).
+#
+# Scenarios S3a-c and S4a-b (NAT64/DNS64) are not automated yet, so a green run says nothing
+# about NAT64/DNS64. The Job Summary states this while those scenarios are missing.
+name: Run experiments
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: run-experiments-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # Must match "name:" in topology.clab.yml (the Makefile reads it too).
+  LAB: bgp-rov-lab
+  # Pinned. 0.79.0 was released on 2026-08-21; get.sh and the .deb exist at that tag.
+  CLAB_VERSION: "0.79.0"
+
+jobs:
+  experiments:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install pytest
+        run: python -m pip install pytest
+
+      - name: Install Containerlab ${{ env.CLAB_VERSION }}
+        run: |
+          curl -fsSL "https://raw.githubusercontent.com/srl-labs/containerlab/v${CLAB_VERSION}/get.sh" -o /tmp/get-clab.sh
+          bash /tmp/get-clab.sh -v "${CLAB_VERSION}"
+          containerlab version
+
+      - name: Preflight (host prerequisites)
+        run: |
+          ls -l /dev/net/tun
+          echo "net.ipv6.conf.all.disable_ipv6 = $(cat /proc/sys/net/ipv6/conf/all/disable_ipv6 2>/dev/null || echo 'n/a: IPv6 is off in this kernel')"
+          docker version --format 'docker server {{.Server.Version}}'
+
+      - name: Build the lab-tools image and deploy the topology
+        run: make up
+
+      - name: Run experiments
+        id: experiments
+        run: make experiments
+
+      - name: Check expectations
+        if: success()
+        run: make check
+
+      - name: Record tool versions
+        if: always()
+        run: |
+          mkdir -p logs
+          {
+            echo "== containerlab";  containerlab version || true
+            echo "== frr";           docker exec "clab-${LAB}-router-validator" vtysh -c "show version" | head -1 || true
+            echo "== routinator";    docker exec "clab-${LAB}-rpki-server" routinator --version || true
+            echo "== lab-tools";     docker run --rm lab-tools:latest sh -c 'unbound -V | head -1; nsd -v 2>&1 | head -1; tayga --version 2>&1 | head -1' || true
+          } > logs/versions.txt 2>&1
+
+      - name: Collect diagnostics
+        if: always()
+        run: |
+          mkdir -p logs
+          for c in $(docker ps -a --filter "name=clab-${LAB}-" --format '{{.Names}}'); do
+            docker logs "$c" > "logs/${c}.log" 2>&1 || true
+          done
+          v="clab-${LAB}-router-validator"
+          for cmd in "show bgp summary" "show rpki cache-connection" "show rpki prefix-table" "show bgp ipv4 unicast" "show ip route"; do
+            docker exec "$v" vtysh -c "$cmd" > "logs/validator_$(echo "$cmd" | tr ' ' '_').txt" 2>&1 || true
+          done
+          docker exec "clab-${LAB}-router-isp" vtysh -c "show bgp summary" > logs/isp_show_bgp_summary.txt 2>&1 || true
+          docker exec "clab-${LAB}-gateway-nat64" sh -c 'ip -br addr; ip -6 route; ps' > logs/gateway_state.txt 2>&1 || true
+
+      - name: Write Job Summary
+        if: always()
+        shell: python
+        run: |
+          import json, os, pathlib
+
+          lines = ["## Experiment results", ""]
+          p = pathlib.Path("results/latest.json")
+          if not p.exists():
+              lines.append("`results/latest.json` was not produced. See the step logs and the `experiment-results` artifact.")
+          else:
+              r = json.loads(p.read_text())
+              mark = {"passed": "✅", "failed": "❌"}
+              lines += [
+                  f"**Run `{r['run_id']}`: {mark.get(r['status'], '⚠️')} {r['status']}** (lab `{r['lab']}`)",
+                  "",
+                  "| Scenario | ROV | Expected | Observed | Status |",
+                  "| --- | --- | --- | --- | --- |",
+              ]
+              for s in r["scenarios"]:
+                  rov = "on" if s["rov_enabled"] else "off"
+                  lines.append(
+                      f"| {s['id']} {s['name']} | {rov} | {s['expected_served_by']} | "
+                      f"{s['observed_served_by']} | {mark.get(s['status'], '⚠️')} {s['status']} |"
+                  )
+              if r["errors"]:
+                  lines += ["", "**Errors**", ""] + [f"- `{e}`" for e in r["errors"]]
+              if not any(s["id"].startswith("S3") for s in r["scenarios"]):
+                  lines += ["", "> NAT64/DNS64 scenarios (S3, S4) are not automated yet: this run covers BGP hijack and ROV only."]
+
+          v = pathlib.Path("logs/versions.txt")
+          if v.exists():
+              lines += ["", "<details><summary>Tool versions</summary>", "", "```text", v.read_text().strip(), "```", "", "</details>"]
+
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as f:
+              f.write("\n".join(lines) + "\n")
+
+      - name: Upload experiment artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: experiment-results
+          path: |
+            results/
+            logs/
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Destroy topology
+        if: always()
+        run: make down

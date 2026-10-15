@@ -1,0 +1,7 @@
+# router-isp, router-origin, router-hijacker.
+# zebra and staticd are always started by frrinit, so only bgpd needs enabling.
+bgpd=yes
+vtysh_enable=yes
+zebra_options="  -A 127.0.0.1 -s 90000000"
+bgpd_options="   -A 127.0.0.1"
+staticd_options="-A 127.0.0.1"

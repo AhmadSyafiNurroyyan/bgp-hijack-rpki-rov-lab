@@ -1,0 +1,150 @@
+# BGP Hijack, RPKI ROV and NAT64/DNS64 lab. Deploy: sudo containerlab deploy -t topology.clab.yml
+# Interface names (eth1..) and addresses follow docs/topology-documentation.md.
+# Every node first drops the Containerlab management default route (implementation-notes, pitfall 1).
+name: bgp-rov-lab
+
+topology:
+  defaults:
+    kind: linux
+
+  nodes:
+    # ---------------- AS65000 ISP-Transit ----------------
+    router-isp:
+      image: frrouting/frr:v8.4.4
+      binds:
+        - configs/router-isp/frr.conf:/etc/frr/frr.conf
+        - configs/common/daemons:/etc/frr/daemons
+      exec:
+        - ip route del default
+        - sysctl -w net.ipv4.ip_forward=1
+        - ip addr add 198.51.100.1/30 dev eth1
+        - ip addr add 198.51.100.5/30 dev eth2
+        - ip addr add 198.51.100.9/30 dev eth3
+
+    # ---------------- AS65010 Origin ----------------
+    router-origin:
+      image: frrouting/frr:v8.4.4
+      binds:
+        - configs/router-origin/frr.conf:/etc/frr/frr.conf
+        - configs/common/daemons:/etc/frr/daemons
+      exec:
+        - ip route del default
+        - sysctl -w net.ipv4.ip_forward=1
+        - ip addr add 198.51.100.2/30 dev eth1
+        - ip addr add 198.51.100.14/30 dev eth2
+        - ip addr add 203.0.113.1/24 dev eth3
+
+    target-v4:
+      image: lab-tools:latest
+      binds:
+        - www/origin:/www:ro
+      exec:
+        - ip route del default
+        - ip addr add 203.0.113.10/24 dev eth1
+        - ip route add default via 203.0.113.1
+        - setsid -f python3 -m http.server 80 --bind 203.0.113.10 --directory /www
+
+    # ---------------- AS65020 Hijacker ----------------
+    router-hijacker:
+      image: frrouting/frr:v8.4.4
+      binds:
+        - configs/router-hijacker/frr.conf:/etc/frr/frr.conf
+        - configs/common/daemons:/etc/frr/daemons
+      exec:
+        - ip route del default
+        - sysctl -w net.ipv4.ip_forward=1
+        - ip addr add 198.51.100.6/30 dev eth1
+        - ip addr add 203.0.113.1/25 dev eth2
+
+    decoy-target:
+      image: lab-tools:latest
+      binds:
+        - www/decoy:/www:ro
+      exec:
+        - ip route del default
+        - ip addr add 203.0.113.10/25 dev eth1
+        - ip route add default via 203.0.113.1
+        - setsid -f python3 -m http.server 80 --bind 203.0.113.10 --directory /www
+
+    # ---------------- AS65001 Validator ----------------
+    router-validator:
+      image: frrouting/frr:v8.4.4
+      binds:
+        - configs/router-validator/frr.conf:/etc/frr/frr.conf
+        - configs/router-validator/daemons:/etc/frr/daemons
+      exec:
+        - ip route del default
+        - sysctl -w net.ipv6.conf.all.disable_ipv6=0
+        - sysctl -w net.ipv4.ip_forward=1
+        - sysctl -w net.ipv6.conf.all.forwarding=1
+        - ip addr add 198.51.100.10/30 dev eth1
+        - ip addr add 198.51.100.13/30 dev eth2
+        - ip addr add 192.0.2.2/30 dev eth3
+        - ip addr add 192.168.1.1/30 dev eth4
+        - ip -6 addr add 2001:db8:6501:ff::1/64 dev eth4
+        - ip -6 addr add 2001:db8:6501:1::1/64 dev eth5
+        - ip addr add 192.0.2.129/26 dev eth6
+        - ip -6 addr add 2001:db8:6501:2::1/64 dev eth6
+
+    rpki-server:
+      image: nlnetlabs/routinator:v0.15.2
+      user: root
+      binds:
+        - configs/rpki-server/routinator.conf:/etc/routinator/routinator.conf:ro
+        - configs/rpki-server/local.slurm:/etc/routinator/local.slurm:ro
+      cmd: -c /etc/routinator/routinator.conf server
+      exec:
+        - ip route del default
+        - ip addr add 192.0.2.1/30 dev eth1
+        - ip route add default via 192.0.2.2
+
+    gateway-nat64:
+      image: lab-tools:latest
+      cap-add:
+        - NET_ADMIN
+      devices:
+        - /dev/net/tun:/dev/net/tun
+      binds:
+        - configs/gateway-nat64:/etc/lab:ro
+      exec:
+        - ip route del default
+        - sysctl -w net.ipv6.conf.all.disable_ipv6=0
+        - sysctl -w net.ipv4.ip_forward=1
+        - sysctl -w net.ipv6.conf.all.forwarding=1
+        - ip addr add 192.168.1.2/30 dev eth1
+        - ip -6 addr add 2001:db8:6501:ff::2/64 dev eth1
+        - ip route add default via 192.168.1.1
+        - ip -6 route add 2001:db8:6501::/48 via 2001:db8:6501:ff::1
+        - sh /etc/lab/start.sh
+
+    client-v6:
+      image: lab-tools:latest
+      exec:
+        - sysctl -w net.ipv6.conf.all.disable_ipv6=0
+        - ip -4 route flush default
+        - ip -4 addr flush dev eth0
+        - ip -6 addr add 2001:db8:6501:1::2/64 dev eth1
+        - ip -6 route add default via 2001:db8:6501:1::1
+        - sh -c 'echo "nameserver 2001:db8:6501:ff::2" > /etc/resolv.conf'
+
+    client-dualstack:
+      image: lab-tools:latest
+      exec:
+        - ip route del default
+        - sysctl -w net.ipv6.conf.all.disable_ipv6=0
+        - ip addr add 192.0.2.130/26 dev eth1
+        - ip route add default via 192.0.2.129
+        - ip -6 addr add 2001:db8:6501:2::2/64 dev eth1
+        - ip -6 route add default via 2001:db8:6501:2::1
+
+  links:
+    - endpoints: ["router-isp:eth1", "router-origin:eth1"]
+    - endpoints: ["router-isp:eth2", "router-hijacker:eth1"]
+    - endpoints: ["router-isp:eth3", "router-validator:eth1"]
+    - endpoints: ["router-validator:eth2", "router-origin:eth2"]
+    - endpoints: ["router-validator:eth3", "rpki-server:eth1"]
+    - endpoints: ["router-validator:eth4", "gateway-nat64:eth1"]
+    - endpoints: ["router-validator:eth5", "client-v6:eth1"]
+    - endpoints: ["router-validator:eth6", "client-dualstack:eth1"]
+    - endpoints: ["router-origin:eth3", "target-v4:eth1"]
+    - endpoints: ["router-hijacker:eth2", "decoy-target:eth1"]

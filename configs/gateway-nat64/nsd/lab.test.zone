@@ -1,0 +1,6 @@
+$ORIGIN lab.test.
+$TTL 300
+@    IN SOA ns.lab.test. admin.lab.test. ( 1 3600 900 604800 300 )
+@    IN NS  ns.lab.test.
+ns   IN A   127.0.0.1
+web  IN A   203.0.113.10

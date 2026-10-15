@@ -1,0 +1,6 @@
+# router-validator: same as common/daemons, but bgpd loads the RPKI module (-M rpki).
+bgpd=yes
+vtysh_enable=yes
+zebra_options="  -A 127.0.0.1 -s 90000000"
+bgpd_options="   -A 127.0.0.1 -M rpki"
+staticd_options="-A 127.0.0.1"
