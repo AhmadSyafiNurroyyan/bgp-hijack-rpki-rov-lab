@@ -1,24 +1,18 @@
-# Containerlab: lab directory created next to the topology file on deploy
-# (inventory, topology-data.json, per-node state, SSH keys), plus topology backups.
+results/
 clab-*/
 *.clab.yml.bak
 .*.clab.yml.bak
 
-# Experiment output. Each run rewrites these, and CI publishes them as an artifact
-# and as the Job Summary instead of committing them.
-# To publish one verified run on purpose:  git add -f results/latest.json
 results/latest.json
 results/history/
 logs/
 
-# Python / pytest
 __pycache__/
 *.pyc
 .pytest_cache/
 .venv/
 venv/
 
-# Editors and OS
 .idea/
 .vscode/
 *.swp
