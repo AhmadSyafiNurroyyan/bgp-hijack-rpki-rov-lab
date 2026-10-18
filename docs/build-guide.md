@@ -919,7 +919,7 @@ sudo containerlab destroy -t topology.clab.yml --cleanup
 
 ### Final checklist
 
-- [ ] Checkpoints 0, 2, 4, 5, 6 passed (routing, RPKI, hijack, ROV).
-- [ ] Checkpoint 7a passed (DNS64 answers). 7b passed, or you know which part failed.
-- [ ] Checkpoint 8 passed (`passed`, `6 passed`).
-- [ ] Every ⚠️ you resolved is relabeled in this guide and in [implementation-notes.md](implementation-notes.md), with your versions.
+- [x] Checkpoints 0, 2, 4, 5, 6 passed (routing, RPKI, hijack, ROV).
+- [x] Checkpoint 7a passed (DNS64 answers) and 7b passed (end-to-end NAT64).
+- [x] Checkpoint 8 passed (`passed`, `6 passed`).
+- [x] Every ⚠️ resolved during the build is relabeled in this guide and in [implementation-notes.md](implementation-notes.md), with the tested versions.

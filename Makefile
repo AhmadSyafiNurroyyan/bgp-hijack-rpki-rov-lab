@@ -26,7 +26,7 @@ build: ## Build the lab-tools image (targets, clients, NAT64/DNS64 gateway)
 up: build ## Build the image and deploy the topology
 	$(SUDO) containerlab deploy -t $(TOPO)
 
-experiments: ## Run scenarios S0-S2 against the running lab, write results/latest.json
+experiments: ## Run scenarios S0-S4 against the running lab, write results/latest.json
 	$(PYTHON) scripts/run_experiments.py
 
 check: ## Assert the expected results in results/latest.json with pytest

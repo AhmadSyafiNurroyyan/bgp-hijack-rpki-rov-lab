@@ -94,21 +94,35 @@ def hijack(on):
         what=f"hijack {'enabled' if on else 'disabled'}",
     )
 
+def route_next_hops():
+    fib = json.loads(vt("router-validator", "show ip route 203.0.113.10 json"))
+    return [n["ip"] for n in list(fib.values())[0][0]["nexthops"]]
+
+def wait_for_forwarding_path(expected):
+    if expected == "origin":
+        ready = lambda: "198.51.100.14" in route_next_hops()
+    else:
+        ready = lambda: bool(route_next_hops()) and "198.51.100.14" not in route_next_hops()
+    wait_until(ready,
+               what=f"{expected} forwarding path")
+
 def scenario(sid, name, rov, expected, after_wait):
     time.sleep(after_wait)
+    wait_for_forwarding_path(expected)
     deadline = time.monotonic() + 30
     rc, got = curl("client-dualstack")
     while got != expected and time.monotonic() < deadline:
         time.sleep(1)
         rc, got = curl("client-dualstack")
     rib25 = vt("router-validator","show bgp ipv4 unicast 203.0.113.0/25")
-    fib = json.loads(vt("router-validator","show ip route 203.0.113.10 json"))
-    nh = [n["ip"] for n in list(fib.values())[0][0]["nexthops"]]
+    nh = route_next_hops()
     return {"id":sid,"name":name,"rov_enabled":rov,"expected_served_by":expected,"observed_served_by":got,
             "status":"passed" if got==expected else "failed",
             "evidence":{"curl_exit_code":rc,"validator_rib_25":rib25,"validator_fib_nexthops":nh}}
 def scenario_v6(sid, name, rov, expected, after_wait):
     time.sleep(after_wait)
+    if expected in ("origin", "decoy"):
+        wait_for_forwarding_path(expected)
     deadline = time.monotonic() + 30
     rc, got = curl_v6()
     while got != expected and time.monotonic() < deadline:

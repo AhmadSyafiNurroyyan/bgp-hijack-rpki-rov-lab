@@ -181,10 +181,10 @@ The README only orients you. Each topic lives in exactly one document.
 │   └── images/topology.png    # static reference diagram
 ├── topology.clab.yml          # 🚧 Containerlab topology
 ├── configs/                   # 🚧 FRR, Routinator (SLURM), Tayga, Unbound
-├── docker/gateway/            # 🚧 Tayga + Unbound image
+├── docker/lab-tools/          # 🚧 Tayga + Unbound and test tools image
 ├── scripts/                   # 🚧 run_experiments.py, write_summary.py
 ├── tests/                     # 🚧 pytest assertions
-├── results/                   # 🚧 latest.json
+├── results/                   # CI artifacts (latest.json is ignored)
 ├── .github/workflows/         # 🚧 CI
 └── Makefile                   # 🚧 up / test / down
 ```
@@ -194,9 +194,9 @@ The README only orients you. Each topic lives in exactly one document.
 | Area | Status |
 | :-- | :-: |
 | Problem statement, topology, experiments, implementation notes, automation design | ✅ done |
-| Containerlab topology and device configs | 🚧 in progress |
-| Experiment scripts, pytest assertions, CI | 🚧 in progress |
-| First published results in `results/latest.json` | ⏳ after implementation |
+| Containerlab topology and device configs | ✅ done |
+| Experiment scripts, pytest assertions, CI | ✅ done |
+| First published results in `results/latest.json` | ✅ produced by CI as an artifact |
 | Dashboard in replay mode | 🔭 future |
 
 ## Limitations

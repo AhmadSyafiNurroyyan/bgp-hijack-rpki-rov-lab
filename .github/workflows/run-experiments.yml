@@ -1,8 +1,5 @@
-# Deploys the lab, runs scenarios S0-S2, asserts the results with pytest, publishes the
+# Deploys the lab, runs scenarios S0-S4, asserts the results with pytest, publishes the
 # evidence, and always destroys the topology. Sequence follows docs/automation-design.md (section 7).
-#
-# Scenarios S3a-c and S4a-b (NAT64/DNS64) are not automated yet, so a green run says nothing
-# about NAT64/DNS64. The Job Summary states this while those scenarios are missing.
 name: Run experiments
 
 on:
@@ -115,9 +112,6 @@ jobs:
                   )
               if r["errors"]:
                   lines += ["", "**Errors**", ""] + [f"- `{e}`" for e in r["errors"]]
-              if not any(s["id"].startswith("S3") for s in r["scenarios"]):
-                  lines += ["", "> NAT64/DNS64 scenarios (S3, S4) are not automated yet: this run covers BGP hijack and ROV only."]
-
           v = pathlib.Path("logs/versions.txt")
           if v.exists():
               lines += ["", "<details><summary>Tool versions</summary>", "", "```text", v.read_text().strip(), "```", "", "</details>"]
