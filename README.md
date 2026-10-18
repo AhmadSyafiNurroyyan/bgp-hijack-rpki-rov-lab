@@ -39,7 +39,7 @@ The lab is designed around a handful of before-and-after observations. These are
 | :-- | :-- | :-- |
 | Does a bogus `/25` really divert traffic? | ROV **off** | `curl -4 http://203.0.113.10` from the dual-stack client returns **"You've been hijacked"** |
 | Does ROV stop it? | ROV **on** (reject-invalid) | The `/25` disappears from the BGP table and the same `curl` returns **"Welcome to Origin Server"** |
-| What breaks when one NAT64 part is down? | DNS64 off and Tayga off → DNS64 only → both on | Fails to resolve → synthetic AAAA `64:ff9b::cb00:710a` but times out → **success** |
+| What breaks when one NAT64 part is down? | DNS64 off and Tayga off → DNS64 only → both on | Fails to resolve → synthetic AAAA `2001:db8:6501:64::cb00:710a` but times out → **success** |
 | Are the two halves really connected? | IPv6-only client through NAT64 | Hijacked while ROV is off, safe while ROV is on |
 
 Step-by-step commands and pass criteria for every row are in [experiments.md](docs/experiments.md).

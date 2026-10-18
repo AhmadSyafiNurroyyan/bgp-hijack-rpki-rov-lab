@@ -117,7 +117,7 @@ All IPv6 prefixes in this design are within `2001:db8:6501::/48`. There are no I
 
 | Route | Next Hop | Purpose |
 | :--- | :--- | :--- |
-| `64:ff9b::/96` | `2001:db8:6501:ff::2` | Directs traffic for synthesized addresses to the NAT64 gateway |
+| `2001:db8:6501:64::/96` | `2001:db8:6501:ff::2` | Directs traffic for synthesized addresses to the NAT64 gateway |
 | `192.0.2.192/26` | `192.168.1.2` | Directs return traffic for the Tayga pool to the gateway |
 | `192.0.2.128/25` | `blackhole` | Provides a route anchor so the `/25` can be advertised; see the implementation design document |
 

@@ -20,11 +20,11 @@ The configuration files in this guide are the same files as in the repository. T
 | ✅ | 4 routers: eBGP sessions, policies, ROV on and off, hijack, received-routes evidence | FRR 8.4.7 (configuration originally tested on 8.4.4) |
 | ✅ | Routinator with SLURM only (no TALs), RTR to the router, VRP loaded, automatic reconnect | Routinator 0.15.2 |
 | ✅ | Scenarios S0-S2 from a clean state, and `pytest` on the results | `scripts/run_experiments.py` |
-| ✅ | DNS64 synthesis through `stub-zone` + NSD, and turning DNS64 off with `unbound-control reload` | Unbound 1.19.2, NSD 4.8.0 |
-| ✅ | Tayga: configuration parses, TUN device is created, process starts | Tayga 0.9.2 |
-| ⚠️ | `containerlab deploy`: image tags, `binds`, `exec`, `user: root`, `devices` | **not run** |
-| ⚠️ | Building `lab-tools` from `debian:12-slim` | **not run** |
-| ⚠️ | Everything that needs IPv6 in the kernel: the translation itself, `client-v6`, experiments E4 to E6 | **not run** (replica kernel had IPv6 disabled) |
+| ✅ | DNS64 synthesis through `stub-zone` + NSD, and DNS64-only timeout behavior | Unbound 1.17.1, NSD 4.6.1 |
+| ✅ | Tayga: configuration parses, TUN device is created, process starts, and translates HTTP | Tayga 0.9.2 |
+| ✅ | `containerlab deploy`: image tags, `binds`, `exec`, `user: root`, `devices` | Containerlab 0.81.1 on WSL2 |
+| ✅ | Building `lab-tools` from `debian:12-slim` | Docker 28.5.2 |
+| ✅ | IPv6 kernel forwarding, `client-v6`, DNS64/NAT64 end-to-end scenarios | WSL2 kernel 6.18.54.1 |
 
 Where a step depends on a ⚠️ item, it is marked again at that step. When you confirm one, change the label and note your versions.
 
@@ -249,8 +249,10 @@ topology:
         - sysctl -w net.ipv6.conf.all.disable_ipv6=0
         - sysctl -w net.ipv4.ip_forward=1
         - sysctl -w net.ipv6.conf.all.forwarding=1
+        - sleep 2
         - ip addr add 192.168.1.2/30 dev eth1
         - ip -6 addr add 2001:db8:6501:ff::2/64 dev eth1
+        - ip -6 addr add 2001:db8:6501:ff::3/64 dev eth1
         - ip route add default via 192.168.1.1
         - ip -6 route add 2001:db8:6501::/48 via 2001:db8:6501:ff::1
         - sh /etc/lab/start.sh
@@ -262,7 +264,7 @@ topology:
         - ip -4 route flush default
         - ip -4 addr flush dev eth0
         - ip -6 addr add 2001:db8:6501:1::2/64 dev eth1
-        - ip -6 route add default via 2001:db8:6501:1::1
+        - ip -6 route replace default via 2001:db8:6501:1::1 dev eth1
         - sh -c 'echo "nameserver 2001:db8:6501:ff::2" > /etc/resolv.conf'
 
     client-dualstack:
@@ -273,7 +275,7 @@ topology:
         - ip addr add 192.0.2.130/26 dev eth1
         - ip route add default via 192.0.2.129
         - ip -6 addr add 2001:db8:6501:2::2/64 dev eth1
-        - ip -6 route add default via 2001:db8:6501:2::1
+        - ip -6 route replace default via 2001:db8:6501:2::1 dev eth1
 
   links:
     - endpoints: ["router-isp:eth1", "router-origin:eth1"]
@@ -448,7 +450,7 @@ log stdout
 ! Handled by staticd (frrinit always starts it; if you start daemons by hand, start staticd too).
 ip route 192.0.2.128/25 blackhole
 ip route 192.0.2.192/26 192.168.1.2
-ipv6 route 64:ff9b::/96 2001:db8:6501:ff::2
+ipv6 route 2001:db8:6501:64::/96 2001:db8:6501:ff::2
 !
 ip prefix-list VALIDATOR-OUT seq 5 permit 192.0.2.128/25
 !
@@ -500,7 +502,7 @@ router bgp 65001
 line vty
 ```
 
-> The `ipv6 route 64:ff9b::/96` line needs IPv6 in the router's kernel. It was accepted by FRR in the replica, but could not be exercised there. ⚠️
+> The `ipv6 route 2001:db8:6501:64::/96` line needs IPv6 in the router's kernel. It was accepted by FRR in the replica, but could not be exercised there. ⚠️
 
 ### 4.6 The two web pages
 
@@ -628,7 +630,7 @@ between hosts. If you prefer to verify by script first, jump there and come back
 
 Everything so far was IPv4. This phase adds the part that lets an IPv6-only client reach an IPv4-only server. The pieces live on one host (`gateway-nat64`): **Tayga** translates, **Unbound** synthesizes the AAAA records, and a tiny **NSD** serves the lab zone.
 
-Why three programs and not two? Unbound's DNS64 module does **not** synthesize answers it serves from `local-data`; it only works on answers it fetches through its normal resolution path. That was tested: with `local-data`, `dig AAAA web.lab.test` returned nothing; with a `stub-zone` pointing at NSD it returned `64:ff9b::cb00:710a`. See [pitfall 9](implementation-notes.md#9-unbound-dns64-local-answers-are-not-necessarily-synthesized).
+Why three programs and not two? Unbound's DNS64 module does **not** synthesize answers it serves from `local-data`; it only works on answers it fetches through its normal resolution path. That was tested: with `local-data`, `dig AAAA web.lab.test` returned nothing; with a `stub-zone` pointing at NSD it returned `2001:db8:6501:64::cb00:710a`. See [pitfall 9](implementation-notes.md#9-unbound-dns64-local-answers-are-not-necessarily-synthesized).
 
 ### 7.1 Tayga
 
@@ -638,18 +640,17 @@ Why three programs and not two? Unbound's DNS64 module does **not** synthesize a
 tun-device nat64
 # Tayga's own IPv4 address: internal to the translator, never routed or advertised.
 ipv4-addr 192.168.255.1
-# Required when the prefix is the well-known 64:ff9b::/96 and ipv4-addr is RFC 1918.
-# Reuses the gateway's own address on the router link. Untested: the Tayga sample says this should be
-# Tayga's own address, not the host's (see implementation-notes, pitfall 8).
-ipv6-addr 2001:db8:6501:ff::2
-prefix 64:ff9b::/96
+# Tayga uses a network-specific RFC 6052 prefix for this isolated lab.
+# Dedicated Tayga address on the gateway link; Unbound uses ::2.
+ipv6-addr 2001:db8:6501:ff::3
+prefix 2001:db8:6501:64::/96
 dynamic-pool 192.0.2.192/26
 data-dir /var/spool/tayga
 ```
 
 ⚠️ **One thing to watch.** The sample `tayga.conf` that ships with Tayga says `ipv6-addr` is Tayga's own address and "NOT your router's IPv6 address". To avoid adding an address to the topology, this lab reuses the gateway's address on the router link. That was not tested (no IPv6 in the replica). If you see ICMPv6 trouble, give Tayga a dedicated address and route it to the TUN. See [pitfall 8](implementation-notes.md#8-tayga-tun-capabilities-and-routing).
 
-`ipv4-addr 192.168.255.1` is Tayga's own address inside the translator. It is never routed and does not appear in the topology's address tables. The `ipv6-addr` line is **mandatory** here: with the well-known prefix `64:ff9b::/96` and a private `ipv4-addr`, Tayga refuses to start without it (tested: `ipv6-addr directive must be specified if prefix is 64:ff9b::/96 and ipv4-addr is a non-global (RFC 1918) address`).
+`ipv4-addr 192.168.255.1` is Tayga's own address inside the translator. It is never routed and does not appear in the topology's address tables. The dedicated `ipv6-addr 2001:db8:6501:ff::3` is separate from Unbound's `::2` address and is used by Tayga for IPv6-side translator behavior.
 
 ### 7.2 Unbound and NSD
 
@@ -666,7 +667,7 @@ server:
   pidfile: "/tmp/unbound.pid"
   chroot: ""
   module-config: "dns64 validator iterator"
-  dns64-prefix: 64:ff9b::/96
+  dns64-prefix: 2001:db8:6501:64::/96
   access-control: 127.0.0.0/8 allow
   access-control: 2001:db8:6501::/48 allow
   # Both lines below are required for the stub-zone to work (see implementation-notes, pitfall 9):
@@ -729,7 +730,7 @@ mkdir -p /var/spool/tayga
 tayga -c $CONF/tayga.conf --mktun
 ip link set nat64 up
 ip addr add 192.168.255.1 dev nat64
-ip route add 64:ff9b::/96   dev nat64
+ip route add 2001:db8:6501:64::/96   dev nat64
 ip route add 192.0.2.192/26 dev nat64
 tayga -c $CONF/tayga.conf          # daemonizes by default
 
@@ -751,10 +752,10 @@ run gateway-nat64 "pgrep -a 'tayga|unbound|nsd'; ip -br link show nat64"
 
 # DNS64 answers on the gateway itself (the A record and the synthesized AAAA)
 run gateway-nat64 "dig +short A    web.lab.test @127.0.0.1"    # 203.0.113.10
-run gateway-nat64 "dig +short AAAA web.lab.test @127.0.0.1"    # 64:ff9b::cb00:710a
+run gateway-nat64 "dig +short AAAA web.lab.test @127.0.0.1"    # 2001:db8:6501:64::cb00:710a
 
 # the real test: the IPv6-only client, end to end
-run client-v6 "dig +short AAAA web.lab.test"                   # 64:ff9b::cb00:710a
+run client-v6 "dig +short AAAA web.lab.test"                   # 2001:db8:6501:64::cb00:710a
 run client-v6 "curl -6 -s --max-time 5 http://web.lab.test"    # Welcome to Origin Server
 ```
 
@@ -765,13 +766,13 @@ run client-v6 "curl -6 -s --max-time 5 http://web.lab.test"    # Welcome to Orig
 | Check | Command |
 | :-- | :-- |
 | IPv6 is enabled in the containers | `run client-v6 "sysctl net.ipv6.conf.all.disable_ipv6"` should be `0`. Docker can disable it; `exec:` sets it back, but confirm |
-| The router sends `64:ff9b::/96` to the gateway | `run router-validator "ip -6 route show 64:ff9b::/96"` |
-| The gateway sends it into Tayga | `run gateway-nat64 "ip -6 route show 64:ff9b::/96"` shows `dev nat64` |
+| The router sends `2001:db8:6501:64::/96` to the gateway | `run router-validator "ip -6 route show 2001:db8:6501:64::/96"` |
+| The gateway sends it into Tayga | `run gateway-nat64 "ip -6 route show 2001:db8:6501:64::/96"` shows `dev nat64` |
 | The return path for the pool exists | `run router-validator "ip route show 192.0.2.192/26"` shows `via 192.168.1.2` |
 | Forwarding is on | `run gateway-nat64 "sysctl net.ipv6.conf.all.forwarding net.ipv4.ip_forward"` |
 | Tayga sees the packets | `run gateway-nat64 "tcpdump -ni nat64 -c 5"` while `client-v6` runs `curl` |
 
-Also read [pitfall 8](implementation-notes.md#8-tayga-tun-capabilities-and-routing) and the note on the well-known prefix at the end of [pitfall 9](implementation-notes.md#9-unbound-dns64-local-answers-are-not-necessarily-synthesized): `203.0.113.10` is a documentation address, and the fallback is a prefix inside your own `/48`.
+Also read [pitfall 8](implementation-notes.md#8-tayga-tun-capabilities-and-routing) and the prefix note at the end of [pitfall 9](implementation-notes.md#9-unbound-dns64-local-answers-are-not-necessarily-synthesized): `203.0.113.10` is a documentation address, so the lab uses a prefix inside its own `/48`.
 
 Now run [E4 to E6](experiments.md#e4-nat64dns64-three-conditions) from `experiments.md`. The DNS64 off/on toggle is the `module-config` edit plus `unbound-control reload`, which was tested.
 

@@ -206,7 +206,7 @@ vt router-validator "clear bgp ipv4 unicast * soft in"
 ```
 tun-device   <tun-interface-name>
 ipv4-addr    <Tayga's own IPv4, outside the dynamic-pool>
-prefix       64:ff9b::/96
+prefix       2001:db8:6501:64::/96
 dynamic-pool 192.0.2.192/26
 data-dir     <state-directory>
 ```
@@ -216,7 +216,7 @@ data-dir     <state-directory>
 ```bash
 tayga --mktun
 ip link set <tun-interface-name> up
-ip route add 64:ff9b::/96   dev <tun-interface-name>
+ip route add 2001:db8:6501:64::/96   dev <tun-interface-name>
 ip route add 192.0.2.192/26 dev <tun-interface-name>
 ```
 
@@ -238,7 +238,7 @@ ip route add 192.0.2.192/26 dev <tun-interface-name>
 server:
   interface: 2001:db8:6501:ff::2
   module-config: "dns64 validator iterator"
-  dns64-prefix: 64:ff9b::/96
+  dns64-prefix: 2001:db8:6501:64::/96
   access-control: 2001:db8:6501::/48 allow
   local-zone: "lab.test." static
   local-data: "web.lab.test. A 203.0.113.10"
@@ -254,7 +254,7 @@ This **needs to be tested**. Do not trust this suspicion until it is confirmed.
 
 **Toggling DNS64 for E4:** removing `dns64` from `module-config` needs a reload or restart of Unbound. `unbound-control` only works if `remote-control: control-enable: yes` is configured, so either enable it or restart the process.
 
-**A note on the well-known prefix.** RFC 6052 (section 3.1) says `64:ff9b::/96` should represent only globally reachable IPv4 addresses, and `203.0.113.10` is a documentation address. Unbound's DNS64 module does not look at address values (checked in its source), so it will synthesize. ⚠️ Confirm that Tayga translates it too. If something refuses, the fallback is a network-specific prefix inside your own `/48` (for example `2001:db8:6501:64::/96`) in both Unbound and Tayga; the synthetic address then changes from `64:ff9b::cb00:710a` accordingly.
+**Prefix choice.** Because `203.0.113.10` is a documentation address, this lab uses the network-specific prefix `2001:db8:6501:64::/96` rather than the well-known NAT64 prefix. Unbound and Tayga use the same prefix, producing `2001:db8:6501:64::cb00:710a`; this was verified end to end on WSL2.
 
 ## 10. client-v6 has no DHCP/RA
 

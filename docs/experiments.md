@@ -244,12 +244,12 @@ run client-v6 "curl -s --max-time 5 http://web.lab.test; echo \"exit=\$?\""
 | Condition | DNS64 | Tayga | `dig AAAA` | `curl` |
 | :-- | :-: | :-: | :-- | :-- |
 | **4a** | off | off | no AAAA record | fails (no usable address) |
-| **4b** | on | off | synthetic AAAA `64:ff9b::cb00:710a` | times out |
+| **4b** | on | off | synthetic AAAA `2001:db8:6501:64::cb00:710a` | times out |
 | **4c** | on | on | synthetic AAAA | **success**, shows "Welcome to Origin Server" |
 
 ⚠️ **Exact `curl` exit codes are not verified.** In 4a, `client-v6` still gets the A record but has no IPv4 route, so depending on the resolver library and the `curl` build the failure can appear as `exit=6` (cannot resolve) or `exit=7` (cannot connect). In 4b the timeout (`exit=28`) only happens while the TUN interface stays up, so packets are queued silently; if the interface is removed, the gateway answers "unreachable" and the failure is immediate. Treat *fails / times out / succeeds* as the contract, and record the real codes once you have run it.
 
-Why `cb00:710a`? Because `203.0.113.10` written in hexadecimal is `cb`=203, `00`=0, `71`=113, `0a`=10 (the RFC 6052 rule for the `64:ff9b::/96` prefix).
+Why `cb00:710a`? Because `203.0.113.10` written in hexadecimal is `cb`=203, `00`=0, `71`=113, `0a`=10 (the RFC 6052 rule for the `2001:db8:6501:64::/96` prefix).
 
 One way to turn a component off, as an example: stop the `tayga` process on `gateway-nat64`; for DNS64, remove `dns64` from Unbound's `module-config` and run `unbound-control reload`.
 
