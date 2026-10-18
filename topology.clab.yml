@@ -44,7 +44,7 @@ topology:
         - ip route del default
         - ip addr add 203.0.113.10/24 dev eth1
         - ip route add default via 203.0.113.1
-        - setsid -f python3 -m http.server 80 --bind 203.0.113.10 --directory /www
+        - sh -c 'python3 -m http.server 80 --bind 0.0.0.0 --directory /www >/tmp/http.log 2>&1 & sleep 1'
 
     # ---------------- AS65020 Hijacker ----------------
     router-hijacker:
@@ -67,7 +67,7 @@ topology:
         - ip route del default
         - ip addr add 203.0.113.10/25 dev eth1
         - ip route add default via 203.0.113.1
-        - setsid -f python3 -m http.server 80 --bind 203.0.113.10 --directory /www
+        - sh -c 'python3 -m http.server 80 --bind 0.0.0.0 --directory /www >/tmp/http.log 2>&1 & sleep 1'
 
     # ---------------- AS65001 Validator ----------------
     router-validator:

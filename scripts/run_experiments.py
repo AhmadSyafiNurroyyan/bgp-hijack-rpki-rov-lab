@@ -48,10 +48,19 @@ def hijack(on):
     run("router-hijacker","vtysh",*(["-N","hijacker"] if MODE=="netns" else []),"-c","conf t","-c","router bgp 65020",
         "-c","address-family ipv4 unicast","-c",("" if on else "no ")+"network 203.0.113.0/25","-c","end",
         check=on)  # "no network" fails when the statement does not exist yet (clean deploy): that is fine
+    wait_until(
+        lambda: ("Network not in table" not in vt("router-hijacker", "show bgp ipv4 unicast 203.0.113.0/25"))
+        == on,
+        what=f"hijack {'enabled' if on else 'disabled'}",
+    )
 
 def scenario(sid, name, rov, expected, after_wait):
     time.sleep(after_wait)
+    deadline = time.monotonic() + 30
     rc, got = curl("client-dualstack")
+    while got != expected and time.monotonic() < deadline:
+        time.sleep(1)
+        rc, got = curl("client-dualstack")
     rib25 = vt("router-validator","show bgp ipv4 unicast 203.0.113.0/25")
     fib = json.loads(vt("router-validator","show ip route 203.0.113.10 json"))
     nh = [n["ip"] for n in list(fib.values())[0][0]["nexthops"]]

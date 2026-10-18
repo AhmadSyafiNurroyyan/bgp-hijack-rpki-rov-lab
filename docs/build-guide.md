@@ -178,7 +178,7 @@ topology:
         - ip route del default
         - ip addr add 203.0.113.10/24 dev eth1
         - ip route add default via 203.0.113.1
-        - setsid -f python3 -m http.server 80 --bind 203.0.113.10 --directory /www
+        - sh -c 'python3 -m http.server 80 --bind 0.0.0.0 --directory /www >/tmp/http.log 2>&1 & sleep 1'
 
     # ---------------- AS65020 Hijacker ----------------
     router-hijacker:
@@ -201,7 +201,7 @@ topology:
         - ip route del default
         - ip addr add 203.0.113.10/25 dev eth1
         - ip route add default via 203.0.113.1
-        - setsid -f python3 -m http.server 80 --bind 203.0.113.10 --directory /www
+        - sh -c 'python3 -m http.server 80 --bind 0.0.0.0 --directory /www >/tmp/http.log 2>&1 & sleep 1'
 
     # ---------------- AS65001 Validator ----------------
     router-validator:
@@ -620,7 +620,9 @@ The routing side is complete, so you can now run the core of the project. Follow
 
 ✅ **Checkpoint 6:** all three rows reproduced. If E2 shows the origin page instead of the decoy, the hijack was never announced; check `show bgp ipv4 unicast 203.0.113.0/25` on `router-isp`.
 
-Phase 8 automates exactly this. If you prefer to verify by script first, jump there and come back.
+Phase 8 automates exactly this. The scenario collector polls the application result for
+up to 30 seconds after each routing-state change, allowing BGP convergence time to vary
+between hosts. If you prefer to verify by script first, jump there and come back.
 
 ## Phase 7. NAT64 and DNS64 on the gateway
 
