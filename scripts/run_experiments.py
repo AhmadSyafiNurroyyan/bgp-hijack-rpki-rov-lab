@@ -93,6 +93,16 @@ def hijack(on):
         == on,
         what=f"hijack {'enabled' if on else 'disabled'}",
     )
+    if on:
+        wait_until(
+            lambda: "65020" in vt("router-validator", "show bgp ipv4 unicast 203.0.113.0/25"),
+            what="hijack propagation to validator",
+        )
+    else:
+        wait_until(
+            lambda: "65020" not in vt("router-validator", "show bgp ipv4 unicast 203.0.113.0/25"),
+            what="hijack withdrawal from validator",
+        )
 
 def route_next_hops():
     fib = json.loads(vt("router-validator", "show ip route 203.0.113.10 json"))
@@ -139,7 +149,7 @@ def main():
         wait_until(sessions_up, what="BGP sessions"); wait_until(rtr_up, what="RTR + VRP")
         set_rov(False); hijack(False); time.sleep(5)
         out["scenarios"].append(scenario("S0","baseline",False,"origin",3))
-        hijack(True); set_rov(False)
+        set_rov(False); hijack(True)
         out["scenarios"].append(scenario("S1","hijack_rov_off",False,"decoy",5))
         set_rov(True)
         out["scenarios"].append(scenario("S2","hijack_rov_on",True,"origin",5))
@@ -149,7 +159,7 @@ def main():
         out["scenarios"].append(scenario_v6("S3b","dns64_only",True,"timeout",2))
         set_tayga(True)
         out["scenarios"].append(scenario_v6("S3c","dns64_nat64_on",True,"origin",2))
-        hijack(True); set_rov(False)
+        set_rov(False); hijack(True)
         out["scenarios"].append(scenario_v6("S4a","integrated_rov_off",False,"decoy",5))
         set_rov(True)
         out["scenarios"].append(scenario_v6("S4b","integrated_rov_on",True,"origin",5))
