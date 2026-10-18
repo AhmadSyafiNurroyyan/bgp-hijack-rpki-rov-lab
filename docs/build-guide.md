@@ -17,7 +17,7 @@ The configuration files in this guide are the same files as in the repository. T
 
 | Status | What | Tested with |
 | :-- | :-- | :-- |
-| ✅ | 4 routers: eBGP sessions, policies, ROV on and off, hijack, received-routes evidence | FRR 8.4.4 |
+| ✅ | 4 routers: eBGP sessions, policies, ROV on and off, hijack, received-routes evidence | FRR 8.4.7 (configuration originally tested on 8.4.4) |
 | ✅ | Routinator with SLURM only (no TALs), RTR to the router, VRP loaded, automatic reconnect | Routinator 0.15.2 |
 | ✅ | Scenarios S0-S2 from a clean state, and `pytest` on the results | `scripts/run_experiments.py` |
 | ✅ | DNS64 synthesis through `stub-zone` + NSD, and turning DNS64 off with `unbound-control reload` | Unbound 1.19.2, NSD 4.8.0 |
@@ -144,7 +144,7 @@ topology:
   nodes:
     # ---------------- AS65000 ISP-Transit ----------------
     router-isp:
-      image: frrouting/frr:v8.4.4
+      image: quay.io/frrouting/frr:8.4.7
       binds:
         - configs/router-isp/frr.conf:/etc/frr/frr.conf
         - configs/common/daemons:/etc/frr/daemons
@@ -157,7 +157,7 @@ topology:
 
     # ---------------- AS65010 Origin ----------------
     router-origin:
-      image: frrouting/frr:v8.4.4
+      image: quay.io/frrouting/frr:8.4.7
       binds:
         - configs/router-origin/frr.conf:/etc/frr/frr.conf
         - configs/common/daemons:/etc/frr/daemons
@@ -180,7 +180,7 @@ topology:
 
     # ---------------- AS65020 Hijacker ----------------
     router-hijacker:
-      image: frrouting/frr:v8.4.4
+      image: quay.io/frrouting/frr:8.4.7
       binds:
         - configs/router-hijacker/frr.conf:/etc/frr/frr.conf
         - configs/common/daemons:/etc/frr/daemons
@@ -202,7 +202,7 @@ topology:
 
     # ---------------- AS65001 Validator ----------------
     router-validator:
-      image: frrouting/frr:v8.4.4
+      image: quay.io/frrouting/frr:8.4.7
       binds:
         - configs/router-validator/frr.conf:/etc/frr/frr.conf
         - configs/router-validator/daemons:/etc/frr/daemons
@@ -286,7 +286,7 @@ topology:
 
 ⚠️ **Not run by the author**, so check these against your Containerlab version if `deploy` complains:
 
-- **Image tags.** `frrouting/frr:v8.4.4` and `nlnetlabs/routinator:v0.15.2` are the versions the configs were tested with; confirm the tags exist on the registry you use.
+- **Image tags.** `quay.io/frrouting/frr:8.4.7` and `nlnetlabs/routinator:v0.15.2` are the versions used by this lab; confirm the tags exist on the registry you use.
 - **`user: root` on `rpki-server`.** The Routinator image may run as an unprivileged user, and `ip addr add` needs root.
 - **`cmd:` on `rpki-server`.** It assumes the image entrypoint is the `routinator` binary, so the arguments are `-c <file> server`. If your image differs, adapt it.
 - **`devices:` and `cap-add:` on the gateway**, see [pitfall 11](implementation-notes.md#11-containerlab-permissions-for-the-gateway).

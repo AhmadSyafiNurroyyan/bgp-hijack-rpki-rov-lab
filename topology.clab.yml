@@ -10,7 +10,7 @@ topology:
   nodes:
     # ---------------- AS65000 ISP-Transit ----------------
     router-isp:
-      image: frrouting/frr:v8.4.4
+      image: quay.io/frrouting/frr:8.4.7
       binds:
         - configs/router-isp/frr.conf:/etc/frr/frr.conf
         - configs/common/daemons:/etc/frr/daemons
@@ -23,7 +23,7 @@ topology:
 
     # ---------------- AS65010 Origin ----------------
     router-origin:
-      image: frrouting/frr:v8.4.4
+      image: quay.io/frrouting/frr:8.4.7
       binds:
         - configs/router-origin/frr.conf:/etc/frr/frr.conf
         - configs/common/daemons:/etc/frr/daemons
@@ -46,7 +46,7 @@ topology:
 
     # ---------------- AS65020 Hijacker ----------------
     router-hijacker:
-      image: frrouting/frr:v8.4.4
+      image: quay.io/frrouting/frr:8.4.7
       binds:
         - configs/router-hijacker/frr.conf:/etc/frr/frr.conf
         - configs/common/daemons:/etc/frr/daemons
@@ -68,7 +68,7 @@ topology:
 
     # ---------------- AS65001 Validator ----------------
     router-validator:
-      image: frrouting/frr:v8.4.4
+      image: quay.io/frrouting/frr:8.4.7
       binds:
         - configs/router-validator/frr.conf:/etc/frr/frr.conf
         - configs/router-validator/daemons:/etc/frr/daemons
