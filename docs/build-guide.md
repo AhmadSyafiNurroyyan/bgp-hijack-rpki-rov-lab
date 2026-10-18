@@ -68,7 +68,7 @@ bgp-rov-lab/
 ├── docs/                             # the documents
 ├── docker/lab-tools/Dockerfile       # Phase 2
 ├── configs/
-│   ├── common/daemons                # Phase 4: FRR daemons for 3 routers
+│   ├── common/{daemons,vtysh.conf}   # Phase 4: shared FRR files
 │   ├── router-isp|origin|hijacker|validator/frr.conf
 │   ├── router-validator/daemons      # Phase 4: same, plus the RPKI module
 │   ├── rpki-server/{routinator.conf,local.slurm}
@@ -148,6 +148,7 @@ topology:
       binds:
         - configs/router-isp/frr.conf:/etc/frr/frr.conf
         - configs/common/daemons:/etc/frr/daemons
+        - configs/common/vtysh.conf:/etc/frr/vtysh.conf
       exec:
         - ip route del default
         - sysctl -w net.ipv4.ip_forward=1
@@ -161,6 +162,7 @@ topology:
       binds:
         - configs/router-origin/frr.conf:/etc/frr/frr.conf
         - configs/common/daemons:/etc/frr/daemons
+        - configs/common/vtysh.conf:/etc/frr/vtysh.conf
       exec:
         - ip route del default
         - sysctl -w net.ipv4.ip_forward=1
@@ -184,6 +186,7 @@ topology:
       binds:
         - configs/router-hijacker/frr.conf:/etc/frr/frr.conf
         - configs/common/daemons:/etc/frr/daemons
+        - configs/common/vtysh.conf:/etc/frr/vtysh.conf
       exec:
         - ip route del default
         - sysctl -w net.ipv4.ip_forward=1
@@ -206,6 +209,7 @@ topology:
       binds:
         - configs/router-validator/frr.conf:/etc/frr/frr.conf
         - configs/router-validator/daemons:/etc/frr/daemons
+        - configs/common/vtysh.conf:/etc/frr/vtysh.conf
       exec:
         - ip route del default
         - sysctl -w net.ipv6.conf.all.disable_ipv6=0
