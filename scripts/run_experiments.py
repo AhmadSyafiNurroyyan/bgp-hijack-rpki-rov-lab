@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
-"""Runs scenarios S0-S2 (BGP hijack and ROV, IPv4 only).
-S3a-c and S4a-b (NAT64/DNS64) are NOT implemented yet: add them after the gateway is verified.
+"""Runs BGP hijack/ROV and DNS64/NAT64 scenarios S0-S2, S3a-c, and S4a-b.
 EXEC_MODE=docker (default, LAB=<lab name>) or netns (sandbox replica without Docker)."""
 import json, os, subprocess, time, datetime, pathlib
 MODE = os.environ.get("EXEC_MODE", "docker"); LAB = os.environ.get("LAB", "bgp-rov-lab")
@@ -38,6 +37,47 @@ def classify(body): return "decoy" if "hijacked" in body else "origin" if "Origi
 def curl(node, extra=()):
     r = run(node,"curl","-4","-s","--max-time","5",*extra,"http://203.0.113.10",check=False)
     return r["returncode"], classify(r["stdout"])
+def curl_v6():
+    r = run("client-v6","curl","-6","-s","--max-time","5","http://web.lab.test",check=False)
+    if r["returncode"] in (6, 7):
+        return r["returncode"], "unresolved"
+    if r["returncode"] == 28:
+        return r["returncode"], "timeout"
+    return r["returncode"], classify(r["stdout"])
+def stop_process(node, name):
+    pids = run(node, "sh", "-c",
+               f"ps -eo pid=,stat=,comm= | awk '$3 == \"{name}\" && $2 !~ /^Z/ {{print $1}}'")["stdout"].split()
+    for pid in pids:
+        run(node, "kill", "-9", pid)
+    wait_until(lambda: not run(node, "sh", "-c",
+                               f"ps -eo pid=,stat=,comm= | awk '$3 == \"{name}\" && $2 !~ /^Z/ {{print $1}}'")["stdout"],
+               what=f"{name} stopped")
+def process_running(node, name):
+    return bool(run(node, "sh", "-c",
+                    f"ps -eo pid=,stat=,comm= | awk '$3 == \"{name}\" && $2 !~ /^Z/ {{print $1}}'")["stdout"])
+def set_dns64(on):
+    stop_process("gateway-nat64", "unbound")
+    if on:
+        run("gateway-nat64", "sh", "-c",
+            "sed 's/module-config: \"dns64 validator iterator\"/module-config: \"dns64 validator iterator\"/' "
+            "/etc/lab/unbound.conf | sed 's/control-enable: yes/control-enable: no/' "
+            "> /tmp/unbound-active.conf")
+    else:
+        run("gateway-nat64", "sh", "-c",
+            "sed 's/module-config: \"dns64 validator iterator\"/module-config: \"validator iterator\"/' "
+            "/etc/lab/unbound.conf | sed 's/control-enable: yes/control-enable: no/' "
+            "> /tmp/unbound-active.conf")
+    run("gateway-nat64", "unbound", "-c", "/tmp/unbound-active.conf")
+    wait_until(lambda: process_running("gateway-nat64", "unbound"),
+               what=f"DNS64 {'enabled' if on else 'disabled'}")
+def set_tayga(on):
+    stop_process("gateway-nat64", "tayga")
+    if on:
+        run("gateway-nat64", "tayga", "-c", "/etc/lab/tayga.conf")
+        run("gateway-nat64", "ip", "-6", "route", "replace", "2001:db8:6501:64::/96", "dev", "nat64")
+        run("gateway-nat64", "ip", "route", "replace", "192.0.2.192/26", "dev", "nat64")
+        wait_until(lambda: process_running("gateway-nat64", "tayga"),
+                   what="Tayga enabled")
 def set_rov(on):
     s = "ROV" if on else "NOROV"
     run("router-validator","vtysh",*(["-N","validator"] if MODE=="netns" else []),
@@ -67,6 +107,17 @@ def scenario(sid, name, rov, expected, after_wait):
     return {"id":sid,"name":name,"rov_enabled":rov,"expected_served_by":expected,"observed_served_by":got,
             "status":"passed" if got==expected else "failed",
             "evidence":{"curl_exit_code":rc,"validator_rib_25":rib25,"validator_fib_nexthops":nh}}
+def scenario_v6(sid, name, rov, expected, after_wait):
+    time.sleep(after_wait)
+    deadline = time.monotonic() + 30
+    rc, got = curl_v6()
+    while got != expected and time.monotonic() < deadline:
+        time.sleep(1)
+        rc, got = curl_v6()
+    return {"id":sid,"name":name,"rov_enabled":rov,"expected_served_by":expected,
+            "observed_served_by":got,"status":"passed" if got==expected else "failed",
+            "evidence":{"curl_exit_code":rc,"dns64_aaaa":run(
+                "client-v6","dig","+short","AAAA","web.lab.test",check=False)["stdout"]}}
 
 def main():
     out = {"run_id": datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H-%M-%SZ"), "lab": LAB, "status":"incomplete","scenarios":[],"errors":[]}
@@ -78,6 +129,17 @@ def main():
         out["scenarios"].append(scenario("S1","hijack_rov_off",False,"decoy",5))
         set_rov(True)
         out["scenarios"].append(scenario("S2","hijack_rov_on",True,"origin",5))
+        set_dns64(False); set_tayga(False)
+        out["scenarios"].append(scenario_v6("S3a","dns64_nat64_off",True,"unresolved",2))
+        set_dns64(True)
+        out["scenarios"].append(scenario_v6("S3b","dns64_only",True,"timeout",2))
+        set_tayga(True)
+        out["scenarios"].append(scenario_v6("S3c","dns64_nat64_on",True,"origin",2))
+        hijack(True); set_rov(False)
+        out["scenarios"].append(scenario_v6("S4a","integrated_rov_off",False,"decoy",5))
+        set_rov(True)
+        out["scenarios"].append(scenario_v6("S4b","integrated_rov_on",True,"origin",5))
+        hijack(False)
         out["status"] = "passed" if all(s["status"]=="passed" for s in out["scenarios"]) else "failed"
     except Exception as e:
         out["errors"].append(repr(e))

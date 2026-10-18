@@ -19,7 +19,7 @@ The configuration files in this guide are the same files as in the repository. T
 | :-- | :-- | :-- |
 | ✅ | 4 routers: eBGP sessions, policies, ROV on and off, hijack, received-routes evidence | FRR 8.4.7 (configuration originally tested on 8.4.4) |
 | ✅ | Routinator with SLURM only (no TALs), RTR to the router, VRP loaded, automatic reconnect | Routinator 0.15.2 |
-| ✅ | Scenarios S0-S2 from a clean state, and `pytest` on the results | `scripts/run_experiments.py` |
+| ✅ | Scenarios S0-S2, S3a-S3c, and S4a-S4b from a clean state, and `pytest` on the results | `scripts/run_experiments.py` |
 | ✅ | DNS64 synthesis through `stub-zone` + NSD, and DNS64-only timeout behavior | Unbound 1.17.1, NSD 4.6.1 |
 | ✅ | Tayga: configuration parses, TUN device is created, process starts, and translates HTTP | Tayga 0.9.2 |
 | ✅ | `containerlab deploy`: image tags, `binds`, `exec`, `user: root`, `devices` | Containerlab 0.81.1 on WSL2 |
@@ -778,7 +778,7 @@ Now run [E4 to E6](experiments.md#e4-nat64dns64-three-conditions) from `experime
 
 ## Phase 8. Automation
 
-`scripts/run_experiments.py` runs scenarios **S0 to S2** (baseline, hijack with ROV off, hijack with ROV on) and writes `results/latest.json`. The `pytest` file asserts on that file. The design, the JSON schema and the CI workflow are in [automation-design.md](automation-design.md).
+`scripts/run_experiments.py` runs scenarios **S0 to S4** (including the DNS64/NAT64 state checks and the integrated IPv6-only client checks) and writes `results/latest.json`. The `pytest` file asserts on that file. The design, the JSON schema and the CI workflow are in [automation-design.md](automation-design.md).
 
 ```bash
 LAB=bgp-rov-lab python3 scripts/run_experiments.py
@@ -788,22 +788,21 @@ python3 -m pytest -q tests/
 Expected output of the first command, one line:
 
 ```text
-{"run_id": "...", "status": "passed", "errors": []} [('S0', 'origin', 'passed'), ('S1', 'decoy', 'passed'), ('S2', 'origin', 'passed')]
+{"run_id": "...", "status": "passed", "errors": []} [('S0', 'origin', 'passed'), ('S1', 'decoy', 'passed'), ('S2', 'origin', 'passed'), ('S3a', 'unresolved', 'passed'), ('S3b', 'timeout', 'passed'), ('S3c', 'origin', 'passed'), ('S4a', 'decoy', 'passed'), ('S4b', 'origin', 'passed')]
 ```
 
-and `4 passed` from `pytest`.
+and `6 passed` from `pytest`.
 
 Two things about the script that you should know:
 
 - **It must work on a clean deploy.** The hijacker starts with no `network` statement, so "stop the hijack" on a fresh lab fails with `Can't find static route specified`. The script tolerates that failure when it *stops* the hijack, and treats it as fatal only when it *starts* it. An earlier version did not, and aborted at the very first step on a clean deploy.
-- **S3a-c and S4a-b (NAT64/DNS64) are not implemented yet.** Add them after Checkpoint 7b passes, and keep the same `id` / `expected_served_by` / `observed_served_by` fields, so `tests/test_results.py` and the dashboard keep working.
+- **NAT64/DNS64 toggles are process-safe.** The automation stops and restarts Unbound and Tayga explicitly, disables Unbound's unused control socket in generated runtime configuration, and ignores unreaped zombie processes left by the container's PID 1.
 
 `scripts/run_experiments.py`:
 
 ```python
 #!/usr/bin/env python3
-"""Runs scenarios S0-S2 (BGP hijack and ROV, IPv4 only).
-S3a-c and S4a-b (NAT64/DNS64) are NOT implemented yet: add them after the gateway is verified.
+"""Runs BGP hijack/ROV and DNS64/NAT64 scenarios S0-S2, S3a-c, and S4a-b.
 EXEC_MODE=docker (default, LAB=<lab name>) or netns (sandbox replica without Docker)."""
 import json, os, subprocess, time, datetime, pathlib
 MODE = os.environ.get("EXEC_MODE", "docker"); LAB = os.environ.get("LAB", "bgp-rov-lab")
@@ -899,7 +898,7 @@ def test_rov_on_origin(results):
     s = sc(results,"S2"); assert s["observed_served_by"] == "origin"; assert "198.51.100.14" in s["evidence"]["validator_fib_nexthops"]
 ```
 
-✅ **Checkpoint 8:** `status` is `passed` and `pytest` reports `4 passed`.
+✅ **Checkpoint 8:** `status` is `passed` and `pytest` reports `6 passed`.
 
 ## Phase 9. Finish
 
@@ -922,5 +921,5 @@ sudo containerlab destroy -t topology.clab.yml --cleanup
 
 - [ ] Checkpoints 0, 2, 4, 5, 6 passed (routing, RPKI, hijack, ROV).
 - [ ] Checkpoint 7a passed (DNS64 answers). 7b passed, or you know which part failed.
-- [ ] Checkpoint 8 passed (`passed`, `4 passed`).
+- [ ] Checkpoint 8 passed (`passed`, `6 passed`).
 - [ ] Every ⚠️ you resolved is relabeled in this guide and in [implementation-notes.md](implementation-notes.md), with your versions.
