@@ -836,7 +836,13 @@ def rtr_up():
     c = json.loads(vt("router-validator","show rpki cache-connection json"))["connections"]
     return bool(c) and c[0]["state"]=="connected" and json.loads(vt("router-validator","show rpki prefix-table json"))["ipv4PrefixCount"]>=1
 
-def classify(body): return "decoy" if "hijacked" in body else "origin" if "Origin Server" in body else "unknown"
+def classify(body):
+    text = (body or "").strip().lower()
+    if "hijack" in text or "decoy" in text:
+        return "decoy"
+    if "origin server" in text or "welcome to origin" in text:
+        return "origin"
+    return "unknown"
 def curl(node, extra=()):
     r = run(node,"curl","-4","-s","--max-time","5",*extra,"http://203.0.113.10",check=False)
     return r["returncode"], classify(r["stdout"])
