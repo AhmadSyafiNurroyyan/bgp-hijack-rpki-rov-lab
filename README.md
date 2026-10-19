@@ -202,7 +202,7 @@ The README only orients you. Each topic lives in exactly one document.
 ## Limitations
 
 A simulation earns trust by being honest about where it differs from reality.
-
+- **It needs a Linux environment with Docker; there is nothing to run in a browser.** Containerlab runs on Linux, so on Windows use WSL2 with Docker Engine inside it. The lab is not a hosted demo, so you need Docker and Containerlab installed before `make up`. After that, a clone is enough: the topology is one file and the images are pinned.
 - **The `/25` hijack is a lab quirk.** On the real Internet most networks drop IPv4 prefixes longer than `/24`, and a real sub-prefix attack is typically a `/24` against a `/23`. Here the `/25` spreads because ISP-Transit deliberately filters nothing, and the documentation range `203.0.113.0/24` is only a single `/24`.
 - **ROV catches wrong origins, not forged ones.** Origin validation checks the prefix and the origin AS. A hijacker who forges the origin passes it, and stopping that takes AS-path validation such as ASPA or BGPsec, which is outside this lab.
 - **The ROAs are local.** They are served through SLURM, not the global RPKI. The ASNs are private, which by definition cannot receive ROAs in the global RPKI.
