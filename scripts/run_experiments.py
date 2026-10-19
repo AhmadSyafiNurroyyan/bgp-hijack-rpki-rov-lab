@@ -56,27 +56,27 @@ def process_running(node, name):
     return bool(run(node, "sh", "-c",
                     f"ps -eo pid=,stat=,comm= | awk '$3 == \"{name}\" && $2 !~ /^Z/ {{print $1}}'")["stdout"])
 def set_dns64(on):
-    stop_process("gateway-nat64", "unbound")
+    stop_process("gateway-nat64-dns64", "unbound")
     if on:
-        run("gateway-nat64", "sh", "-c",
+        run("gateway-nat64-dns64", "sh", "-c",
             "sed 's/module-config: \"dns64 validator iterator\"/module-config: \"dns64 validator iterator\"/' "
             "/etc/lab/unbound.conf | sed 's/control-enable: yes/control-enable: no/' "
             "> /tmp/unbound-active.conf")
     else:
-        run("gateway-nat64", "sh", "-c",
+        run("gateway-nat64-dns64", "sh", "-c",
             "sed 's/module-config: \"dns64 validator iterator\"/module-config: \"validator iterator\"/' "
             "/etc/lab/unbound.conf | sed 's/control-enable: yes/control-enable: no/' "
             "> /tmp/unbound-active.conf")
-    run("gateway-nat64", "unbound", "-c", "/tmp/unbound-active.conf")
-    wait_until(lambda: process_running("gateway-nat64", "unbound"),
+    run("gateway-nat64-dns64", "unbound", "-c", "/tmp/unbound-active.conf")
+    wait_until(lambda: process_running("gateway-nat64-dns64", "unbound"),
                what=f"DNS64 {'enabled' if on else 'disabled'}")
 def set_tayga(on):
-    stop_process("gateway-nat64", "tayga")
+    stop_process("gateway-nat64-dns64", "tayga")
     if on:
-        run("gateway-nat64", "tayga", "-c", "/etc/lab/tayga.conf")
-        run("gateway-nat64", "ip", "-6", "route", "replace", "2001:db8:6501:64::/96", "dev", "nat64")
-        run("gateway-nat64", "ip", "route", "replace", "192.0.2.192/26", "dev", "nat64")
-        wait_until(lambda: process_running("gateway-nat64", "tayga"),
+        run("gateway-nat64-dns64", "tayga", "-c", "/etc/lab/tayga.conf")
+        run("gateway-nat64-dns64", "ip", "-6", "route", "replace", "2001:db8:6501:64::/96", "dev", "nat64")
+        run("gateway-nat64-dns64", "ip", "route", "replace", "192.0.2.192/26", "dev", "nat64")
+        wait_until(lambda: process_running("gateway-nat64-dns64", "tayga"),
                    what="Tayga enabled")
 def set_rov(on):
     s = "ROV" if on else "NOROV"

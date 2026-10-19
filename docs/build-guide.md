@@ -117,10 +117,10 @@ docker run --rm lab-tools sh -c 'command -v tayga unbound nsd dig curl python3 p
 | ISP ↔ Validator | `router-isp:eth3` | `router-validator:eth1` |
 | Validator ↔ Origin (peering) | `router-validator:eth2` | `router-origin:eth2` |
 | Validator ↔ RPKI | `router-validator:eth3` | `rpki-server:eth1` |
-| Validator ↔ gateway | `router-validator:eth4` | `gateway-nat64:eth1` |
+| Validator ↔ gateway | `router-validator:eth4` | `gateway-nat64-dns64:eth1` |
 | Validator ↔ client-v6 | `router-validator:eth5` | `client-v6:eth1` |
 | Validator ↔ client-dualstack | `router-validator:eth6` | `client-dualstack:eth1` |
-| Origin ↔ target | `router-origin:eth3` | `target-v4:eth1` |
+| Origin ↔ web-server | `router-origin:eth3` | `web-server-origin:eth1` |
 | Hijacker ↔ decoy | `router-hijacker:eth2` | `decoy-target:eth1` |
 
 Three things in the file are worth understanding before you copy it:
@@ -170,7 +170,7 @@ topology:
         - ip addr add 198.51.100.14/30 dev eth2
         - ip addr add 203.0.113.1/24 dev eth3
 
-    target-v4:
+    web-server-origin:
       image: lab-tools:latest
       binds:
         - www/origin:/www:ro
@@ -236,7 +236,7 @@ topology:
         - ip addr add 192.0.2.1/30 dev eth1
         - ip route add default via 192.0.2.2
 
-    gateway-nat64:
+    gateway-nat64-dns64:
       image: lab-tools:latest
       cap-add:
         - NET_ADMIN
@@ -283,10 +283,10 @@ topology:
     - endpoints: ["router-isp:eth3", "router-validator:eth1"]
     - endpoints: ["router-validator:eth2", "router-origin:eth2"]
     - endpoints: ["router-validator:eth3", "rpki-server:eth1"]
-    - endpoints: ["router-validator:eth4", "gateway-nat64:eth1"]
+    - endpoints: ["router-validator:eth4", "gateway-nat64-dns64:eth1"]
     - endpoints: ["router-validator:eth5", "client-v6:eth1"]
     - endpoints: ["router-validator:eth6", "client-dualstack:eth1"]
-    - endpoints: ["router-origin:eth3", "target-v4:eth1"]
+    - endpoints: ["router-origin:eth3", "web-server-origin:eth1"]
     - endpoints: ["router-hijacker:eth2", "decoy-target:eth1"]
 ```
 
@@ -608,7 +608,7 @@ run client-dualstack "curl -4 -s --max-time 5 http://203.0.113.10"   # Welcome t
 | `No connection to RPKI cache server` | Routinator not listening yet (wait for `retry_interval`), or `rtr-listen` is not `0.0.0.0:3323` |
 | `ip route get` shows `eth0` or `172.20.20.1` | the management default route is still there, [pitfall 1](implementation-notes.md#1-the-management-interface-brings-its-own-ipv4-default-route) |
 | Ping and `curl` time out but sessions are up | forwarding is off on a router: `run router-isp "sysctl net.ipv4.ip_forward"` |
-| `curl` is refused | the web server on the target did not start: `run target-v4 "ss -ltn"` |
+| `curl` is refused | the web server on the target did not start: `run web-server-origin "ss -ltn"` |
 
 ## Phase 6. The hijack and ROV
 
@@ -628,7 +628,7 @@ between hosts. If you prefer to verify by script first, jump there and come back
 
 ## Phase 7. NAT64 and DNS64 on the gateway
 
-Everything so far was IPv4. This phase adds the part that lets an IPv6-only client reach an IPv4-only server. The pieces live on one host (`gateway-nat64`): **Tayga** translates, **Unbound** synthesizes the AAAA records, and a tiny **NSD** serves the lab zone.
+Everything so far was IPv4. This phase adds the part that lets an IPv6-only client reach an IPv4-only server. The pieces live on one host (`gateway-nat64-dns64`): **Tayga** translates, **Unbound** synthesizes the AAAA records, and a tiny **NSD** serves the lab zone.
 
 Why three programs and not two? Unbound's DNS64 module does **not** synthesize answers it serves from `local-data`; it only works on answers it fetches through its normal resolution path. That was tested: with `local-data`, `dig AAAA web.lab.test` returned nothing; with a `stub-zone` pointing at NSD it returned `2001:db8:6501:64::cb00:710a`. See [pitfall 9](implementation-notes.md#9-unbound-dns64-local-answers-are-not-necessarily-synthesized).
 
@@ -720,7 +720,7 @@ web  IN A   203.0.113.10
 
 ```bash
 #!/bin/sh
-# Starts NAT64 (Tayga) and DNS64 (NSD + Unbound) on gateway-nat64.
+# Starts NAT64 (Tayga) and DNS64 (NSD + Unbound) on gateway-nat64-dns64.
 # E4 toggles: stop only the tayga process (keep the nat64 interface up), or edit module-config in unbound.conf and run: unbound-control reload
 set -e
 CONF=/etc/lab
@@ -748,11 +748,11 @@ sudo containerlab deploy -t topology.clab.yml --reconfigure   # destroys the old
 
 ```bash
 # the translator and the two DNS processes are running, the TUN device exists
-run gateway-nat64 "pgrep -a 'tayga|unbound|nsd'; ip -br link show nat64"
+run gateway-nat64-dns64 "pgrep -a 'tayga|unbound|nsd'; ip -br link show nat64"
 
 # DNS64 answers on the gateway itself (the A record and the synthesized AAAA)
-run gateway-nat64 "dig +short A    web.lab.test @127.0.0.1"    # 203.0.113.10
-run gateway-nat64 "dig +short AAAA web.lab.test @127.0.0.1"    # 2001:db8:6501:64::cb00:710a
+run gateway-nat64-dns64 "dig +short A    web.lab.test @127.0.0.1"    # 203.0.113.10
+run gateway-nat64-dns64 "dig +short AAAA web.lab.test @127.0.0.1"    # 2001:db8:6501:64::cb00:710a
 
 # the real test: the IPv6-only client, end to end
 run client-v6 "dig +short AAAA web.lab.test"                   # 2001:db8:6501:64::cb00:710a
@@ -767,10 +767,10 @@ run client-v6 "curl -6 -s --max-time 5 http://web.lab.test"    # Welcome to Orig
 | :-- | :-- |
 | IPv6 is enabled in the containers | `run client-v6 "sysctl net.ipv6.conf.all.disable_ipv6"` should be `0`. Docker can disable it; `exec:` sets it back, but confirm |
 | The router sends `2001:db8:6501:64::/96` to the gateway | `run router-validator "ip -6 route show 2001:db8:6501:64::/96"` |
-| The gateway sends it into Tayga | `run gateway-nat64 "ip -6 route show 2001:db8:6501:64::/96"` shows `dev nat64` |
+| The gateway sends it into Tayga | `run gateway-nat64-dns64 "ip -6 route show 2001:db8:6501:64::/96"` shows `dev nat64` |
 | The return path for the pool exists | `run router-validator "ip route show 192.0.2.192/26"` shows `via 192.168.1.2` |
-| Forwarding is on | `run gateway-nat64 "sysctl net.ipv6.conf.all.forwarding net.ipv4.ip_forward"` |
-| Tayga sees the packets | `run gateway-nat64 "tcpdump -ni nat64 -c 5"` while `client-v6` runs `curl` |
+| Forwarding is on | `run gateway-nat64-dns64 "sysctl net.ipv6.conf.all.forwarding net.ipv4.ip_forward"` |
+| Tayga sees the packets | `run gateway-nat64-dns64 "tcpdump -ni nat64 -c 5"` while `client-v6` runs `curl` |
 
 Also read [pitfall 8](implementation-notes.md#8-tayga-tun-capabilities-and-routing) and the prefix note at the end of [pitfall 9](implementation-notes.md#9-unbound-dns64-local-answers-are-not-necessarily-synthesized): `203.0.113.10` is a documentation address, so the lab uses a prefix inside its own `/48`.
 

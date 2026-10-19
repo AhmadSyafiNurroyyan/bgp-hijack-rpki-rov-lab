@@ -22,13 +22,13 @@ At the end, the two stories are combined: an IPv6-only client going through NAT6
 | AS | Role | Notes |
 | :-- | :-- | :-- |
 | AS65000 | ISP-Transit | Upstream for all other ASes, **no filtering** |
-| AS65010 | Origin AS | Legitimate owner of `203.0.113.0/24`; runs `target-v4` |
+| AS65010 | Origin AS | Legitimate owner of `203.0.113.0/24`; runs `web-server-origin` |
 | AS65020 | Hijacker AS | Announces `203.0.113.0/25` without authorization; runs `decoy-target` |
 | AS65001 | Validator AS | Runs ROV, NAT64/DNS64, and the clients |
 
 One thing people often get wrong: **ROV is performed by `router-validator`, not by Routinator.** Routinator only validates ROAs and sends the resulting VRPs to the router over RTR; it is the router that decides whether to accept or reject a route.
 
-Two web pages let us see the outcome with our own eyes: `target-v4` shows **"Welcome to Origin Server"**, and `decoy-target` shows **"You've been hijacked"**.
+Two web pages let us see the outcome with our own eyes: `web-server-origin` shows **"Welcome to Origin Server"**, and `decoy-target` shows **"You've been hijacked"**.
 
 ---
 
@@ -130,7 +130,7 @@ run client-dualstack "curl -4 -s --max-time 5 http://203.0.113.10"   # "Welcome 
 
 - [ ] 4 eBGP sessions are `Established` and stable.
 - [ ] The Validator learns the `/24` over two paths, there is no `/25` yet, and the return path (`192.0.2.128/25`) is visible at the ISP and at Origin.
-- [ ] The baseline `curl -4` lands on `target-v4`.
+- [ ] The baseline `curl -4` lands on `web-server-origin`.
 
 ---
 
@@ -218,14 +218,14 @@ vt router-origin "show ip route 203.0.113.10"
 
 | Observation | Result |
 | :-- | :-- |
-| HTTP response | **"Welcome to Origin Server"** (lands on `target-v4`) |
+| HTTP response | **"Welcome to Origin Server"** (lands on `web-server-origin`) |
 | Validator BGP table | `/25` absent, but still visible in `received-routes` |
 | Validator next hop | towards Origin over the peering link `198.51.100.12/30` |
 | `router-origin` | does not route `203.0.113.10` via the ISP |
 
 **Pass if**
 
-- [ ] ROV on: the `/25` is rejected and `curl -4` lands on target-v4.
+- [ ] ROV on: the `/25` is rejected and `curl -4` lands on web-server-origin.
 - [ ] `router-origin` does not route `203.0.113.10` via the ISP.
 
 ---
@@ -234,7 +234,7 @@ vt router-origin "show ip route 203.0.113.10"
 
 **Goal:** show that NAT64/DNS64 is **two components that depend on each other**. DNS64 fabricates the address, Tayga translates it. If either one is down, the failure looks different.
 
-Everything is run from `client-v6` with **ROV on**. `target-v4` has only IPv4, so `web.lab.test` has only an A record (`203.0.113.10`).
+Everything is run from `client-v6` with **ROV on**. `web-server-origin` has only IPv4, so `web.lab.test` has only an A record (`203.0.113.10`).
 
 ```bash
 run client-v6 "dig AAAA web.lab.test"
@@ -251,7 +251,7 @@ run client-v6 "curl -s --max-time 5 http://web.lab.test; echo \"exit=\$?\""
 
 Why `cb00:710a`? Because `203.0.113.10` written in hexadecimal is `cb`=203, `00`=0, `71`=113, `0a`=10 (the RFC 6052 rule for the `2001:db8:6501:64::/96` prefix).
 
-One way to turn a component off, as an example: stop the `tayga` process on `gateway-nat64`; for DNS64, remove `dns64` from Unbound's `module-config` and run `unbound-control reload`.
+One way to turn a component off, as an example: stop the `tayga` process on `gateway-nat64-dns64`; for DNS64, remove `dns64` from Unbound's `module-config` and run `unbound-control reload`.
 
 **Repeat several times to check consistency** (the 10 is just an example):
 
@@ -294,7 +294,7 @@ run client-v6 "curl -s --max-time 5 http://web.lab.test"
 | ROV state | Result at client-v6 |
 | :-- | :-- |
 | off | "You've been hijacked" (lands on `decoy-target`) |
-| on | "Welcome to Origin Server" (lands on `target-v4`) |
+| on | "Welcome to Origin Server" (lands on `web-server-origin`) |
 
 Why does this work in both directions? The Tayga pool (`192.0.2.192/26`) sits inside the `192.0.2.128/25` block that is advertised to the ISP and Origin, so replies from either server, including the decoy, can still find their way back to the gateway.
 
@@ -323,10 +323,10 @@ All of the phases above are run by scripts and CI (GitHub Actions), so the resul
 
 | # | Criterion | Experiment |
 | :-: | :-- | :-: |
-| 1 | Clean baseline: 4 eBGP sessions `Established`, no `/25`, traffic reaches target-v4 | E1 |
+| 1 | Clean baseline: 4 eBGP sessions `Established`, no `/25`, traffic reaches web-server-origin | E1 |
 | 2 | RTR session router-validator ↔ rpki-server is up | E2 |
 | 3 | ROV off: `/25` accepted, `curl -4` lands on the decoy | E2 |
-| 4 | ROV on: `/25` rejected, `curl -4` lands on target-v4 | E3 |
+| 4 | ROV on: `/25` rejected, `curl -4` lands on web-server-origin | E3 |
 | 5 | router-origin does not route `203.0.113.10` via the ISP | E3 |
 | 6 | NAT64/DNS64: resolution failure → timeout → success | E4 |
 | 7 | client-dualstack reaches the server directly without NAT64 (control) | E5 |

@@ -51,7 +51,7 @@ Four autonomous systems share one Containerlab topology. A transit ISP that deli
 | AS | Role in the story |
 | :-- | :-- |
 | **AS65000** · ISP-Transit | Upstream for everyone, **no filtering** by design |
-| **AS65010** · AS Origin | Rightful owner of `203.0.113.0/24`, runs `target-v4` |
+| **AS65010** · AS Origin | Rightful owner of `203.0.113.0/24`, runs `web-server-origin` |
 | **AS65020** · AS Hijacker | Announces `203.0.113.0/25` without authorization, runs `decoy-target` |
 | **AS65001** · AS Validator | Runs ROV, the NAT64/DNS64 gateway, and the test clients |
 

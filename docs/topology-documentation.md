@@ -105,8 +105,8 @@ The IPv4 block used by AS Validator is `192.0.2.0/24`. This is a documentation a
 | Link | Subnet | Addresses |
 | :--- | :--- | :--- |
 | router-validator ↔ rpki-server | `192.0.2.0/30` | rpki-server `.1`, router `.2`; RTR TCP port `3323` |
-| router-validator ↔ gateway-nat64 (IPv4) | `192.168.1.0/30` | Router `.1`, gateway `.2` |
-| router-validator ↔ gateway-nat64 (IPv6) | `2001:db8:6501:ff::/64` | Router `::1`, gateway `::2` (DNS64 resolver) |
+| router-validator ↔ gateway-nat64-dns64 (IPv4) | `192.168.1.0/30` | Router `.1`, gateway `.2` |
+| router-validator ↔ gateway-nat64-dns64 (IPv6) | `2001:db8:6501:ff::/64` | Router `::1`, gateway `::2` (DNS64 resolver) |
 | router-validator ↔ client-v6 | `2001:db8:6501:1::/64` | Router `::1`, client-v6 `::2` |
 | router-validator ↔ client-dualstack (IPv4) | `192.0.2.128/26` | Router `.129`, client-dualstack `.130` |
 | router-validator ↔ client-dualstack (IPv6) | `2001:db8:6501:2::/64` | Router `::1`, client-dualstack `::2` |
@@ -121,7 +121,7 @@ All IPv6 prefixes in this design are within `2001:db8:6501::/48`. There are no I
 | `192.0.2.192/26` | `192.168.1.2` | Directs return traffic for the Tayga pool to the gateway |
 | `192.0.2.128/25` | `blackhole` | Provides a route anchor so the `/25` can be advertised; see the implementation design document |
 
-### 5.5 Routes on gateway-nat64
+### 5.5 Routes on gateway-nat64-dns64
 
 | Route | Next Hop |
 | :--- | :--- |
@@ -154,7 +154,7 @@ All IPv6 prefixes in this design are within `2001:db8:6501::/48`. There are no I
 | AS65000 (ISP-Transit) | `router-isp` |
 | AS65010 (AS Origin) | `router-origin`, `origin web server target` |
 | AS65020 (AS Hijacker) | `router-hijacker`, `decoy-target` |
-| AS65001 (AS Validator) | `router-validator`, `gateway-nat64`, `client-v6`, `client-dualstack` |
+| AS65001 (AS Validator) | `router-validator`, `gateway-nat64-dns64`, `client-v6`, `client-dualstack` |
 | RPKI service | `rpki-server` |
 
 **Total: 10 nodes.**

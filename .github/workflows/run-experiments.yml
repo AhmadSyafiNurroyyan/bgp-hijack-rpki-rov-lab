@@ -83,7 +83,7 @@ jobs:
             docker exec "$v" vtysh -c "$cmd" > "logs/validator_$(echo "$cmd" | tr ' ' '_').txt" 2>&1 || true
           done
           docker exec "clab-${LAB}-router-isp" vtysh -c "show bgp summary" > logs/isp_show_bgp_summary.txt 2>&1 || true
-          docker exec "clab-${LAB}-gateway-nat64" sh -c 'ip -br addr; ip -6 route; ps' > logs/gateway_state.txt 2>&1 || true
+          docker exec "clab-${LAB}-gateway-nat64-dns64" sh -c 'ip -br addr; ip -6 route; ps' > logs/gateway_state.txt 2>&1 || true
 
       - name: Write Job Summary
         if: always()

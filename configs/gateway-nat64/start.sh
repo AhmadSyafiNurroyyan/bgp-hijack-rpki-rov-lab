@@ -1,5 +1,5 @@
 #!/bin/sh
-# Starts NAT64 (Tayga) and DNS64 (NSD + Unbound) on gateway-nat64.
+# Starts NAT64 (Tayga) and DNS64 (NSD + Unbound) on gateway-nat64-dns64.
 # E4 toggles: stop only the tayga process (keep the nat64 interface up), or edit module-config in unbound.conf and run: unbound-control reload
 set -e
 CONF=/etc/lab

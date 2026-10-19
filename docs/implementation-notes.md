@@ -41,7 +41,7 @@ The experiment steps are in [experiments.md](experiments.md). Topology and addre
 
 ### One note if you run the lab on Oracle Always Free
 
-⚠️ An ARM instance means every image must have an `arm64` variant, including the custom `gateway-nat64` image, which has to be built on the same architecture. Check that `arm64` variants exist for the FRR and Routinator images before deploying.
+⚠️ An ARM instance means every image must have an `arm64` variant, including the custom `gateway-nat64-dns64` image, which has to be built on the same architecture. Check that `arm64` variants exist for the FRR and Routinator images before deploying.
 
 ---
 
@@ -61,11 +61,11 @@ They are ordered the way you will probably run into them while building the lab.
 
 ```bash
 run client-dualstack "ip route replace default via 192.0.2.129"
-run gateway-nat64    "ip route replace default via 192.168.1.1"
+run gateway-nat64-dns64    "ip route replace default via 192.168.1.1"
 run client-v6        "ip -4 route flush default; ip -4 addr flush dev eth0"
 ```
 
-Also confirm forwarding is on wherever traffic is routed (`router-*` and `gateway-nat64`): `net.ipv4.ip_forward=1` and `net.ipv6.conf.all.forwarding=1`. Router containers do not always have it enabled by default, so check with `sysctl` before debugging anything else.
+Also confirm forwarding is on wherever traffic is routed (`router-*` and `gateway-nat64-dns64`): `net.ipv4.ip_forward=1` and `net.ipv6.conf.all.forwarding=1`. Router containers do not always have it enabled by default, so check with `sysctl` before debugging anything else.
 
 ## 2. FRR refuses eBGP without a route-map
 
@@ -275,7 +275,7 @@ echo "nameserver 2001:db8:6501:ff::2" > /etc/resolv.conf
 **Fix:** include the capability and the device in the gateway node's definition.
 
 ```yaml
-gateway-nat64:
+gateway-nat64-dns64:
   kind: linux
   cap-add:
     - NET_ADMIN

@@ -36,7 +36,7 @@ topology:
         - ip addr add 198.51.100.14/30 dev eth2
         - ip addr add 203.0.113.1/24 dev eth3
 
-    target-v4:
+    web-server-origin:
       image: lab-tools:latest
       binds:
         - www/origin:/www:ro
@@ -102,7 +102,7 @@ topology:
         - ip addr add 192.0.2.1/30 dev eth1
         - ip route add default via 192.0.2.2
 
-    gateway-nat64:
+    gateway-nat64-dns64:
       image: lab-tools:latest
       cap-add:
         - NET_ADMIN
@@ -149,8 +149,8 @@ topology:
     - endpoints: ["router-isp:eth3", "router-validator:eth1"]
     - endpoints: ["router-validator:eth2", "router-origin:eth2"]
     - endpoints: ["router-validator:eth3", "rpki-server:eth1"]
-    - endpoints: ["router-validator:eth4", "gateway-nat64:eth1"]
+    - endpoints: ["router-validator:eth4", "gateway-nat64-dns64:eth1"]
     - endpoints: ["router-validator:eth5", "client-v6:eth1"]
     - endpoints: ["router-validator:eth6", "client-dualstack:eth1"]
-    - endpoints: ["router-origin:eth3", "target-v4:eth1"]
+    - endpoints: ["router-origin:eth3", "web-server-origin:eth1"]
     - endpoints: ["router-hijacker:eth2", "decoy-target:eth1"]
