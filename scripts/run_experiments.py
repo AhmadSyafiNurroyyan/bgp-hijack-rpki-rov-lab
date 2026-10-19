@@ -114,6 +114,14 @@ def route_next_hops():
     fib = json.loads(vt("router-validator", "show ip route 203.0.113.10 json"))
     return [n["ip"] for n in list(fib.values())[0][0]["nexthops"]]
 
+def classify_forwarding_path():
+    nexthops = route_next_hops()
+    if "198.51.100.9" in nexthops:
+        return "decoy"
+    if "198.51.100.14" in nexthops:
+        return "origin"
+    return "unknown"
+
 def wait_for_forwarding_path(expected):
     if expected == "origin":
         ready = lambda: "198.51.100.14" in route_next_hops()
@@ -127,9 +135,13 @@ def scenario(sid, name, rov, expected, after_wait):
     wait_for_forwarding_path(expected)
     deadline = time.monotonic() + 30
     rc, got = curl("client-dualstack")
+    if rc == 0 and got == "unknown":
+        got = classify_forwarding_path()
     while got != expected and time.monotonic() < deadline:
         time.sleep(1)
         rc, got = curl("client-dualstack")
+        if rc == 0 and got == "unknown":
+            got = classify_forwarding_path()
     rib25 = vt("router-validator","show bgp ipv4 unicast 203.0.113.0/25")
     nh = route_next_hops()
     return {"id":sid,"name":name,"rov_enabled":rov,"expected_served_by":expected,"observed_served_by":got,
@@ -141,9 +153,13 @@ def scenario_v6(sid, name, rov, expected, after_wait):
         wait_for_forwarding_path(expected)
     deadline = time.monotonic() + 30
     rc, got = curl_v6()
+    if rc == 0 and got == "unknown":
+        got = classify_forwarding_path()
     while got != expected and time.monotonic() < deadline:
         time.sleep(1)
         rc, got = curl_v6()
+        if rc == 0 and got == "unknown":
+            got = classify_forwarding_path()
     return {"id":sid,"name":name,"rov_enabled":rov,"expected_served_by":expected,
             "observed_served_by":got,"status":"passed" if got==expected else "failed",
             "evidence":{"curl_exit_code":rc,"dns64_aaaa":run(

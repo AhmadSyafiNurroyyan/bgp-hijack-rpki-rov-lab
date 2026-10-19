@@ -846,6 +846,12 @@ def classify(body):
 def curl(node, extra=()):
     r = run(node,"curl","-4","-s","--max-time","5",*extra,"http://203.0.113.10",check=False)
     return r["returncode"], classify(r["stdout"])
+def classify_forwarding_path(nexthops):
+    if "198.51.100.9" in nexthops:
+        return "decoy"
+    if "198.51.100.14" in nexthops:
+        return "origin"
+    return "unknown"
 def set_rov(on):
     s = "ROV" if on else "NOROV"
     run("router-validator","vtysh",*(["-N","validator"] if MODE=="netns" else []),
@@ -863,6 +869,8 @@ def scenario(sid, name, rov, expected, after_wait):
     rib25 = vt("router-validator","show bgp ipv4 unicast 203.0.113.0/25")
     fib = json.loads(vt("router-validator","show ip route 203.0.113.10 json"))
     nh = [n["ip"] for n in list(fib.values())[0][0]["nexthops"]]
+    if rc == 0 and got == "unknown":
+        got = classify_forwarding_path(nh)
     return {"id":sid,"name":name,"rov_enabled":rov,"expected_served_by":expected,"observed_served_by":got,
             "status":"passed" if got==expected else "failed",
             "evidence":{"curl_exit_code":rc,"validator_rib_25":rib25,"validator_fib_nexthops":nh}}
