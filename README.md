@@ -197,7 +197,6 @@ The README only orients you. Each topic lives in exactly one document.
 | Containerlab topology and device configs | ✅ done |
 | Experiment scripts, pytest assertions, CI | ✅ done |
 | First published results in `results/latest.json` | ✅ produced by CI as an artifact |
-| Dashboard in replay mode | 🔭 future |
 
 ## Limitations
 
@@ -213,7 +212,7 @@ A simulation earns trust by being honest about where it differs from reality.
 
 ## Future work
 
-DNSSEC and KSK rollover · peering through an IXP route server instead of a direct link · ASPA · SNMP and telemetry · a replay-mode dashboard
+DNSSEC and KSK rollover · peering through an IXP route server instead of a direct link · ASPA · SNMP and telemetry
 
 ## FAQ
 
@@ -236,6 +235,8 @@ Add it to [implementation-notes.md](docs/implementation-notes.md) in the same *s
 ## References
 
 Sources and figures are listed, with their dates, in [problem-and-solution.md](docs/problem-and-solution.md#4-references).
+
+README presentation reference: [DietrichGebert/ponytail](https://github.com/DietrichGebert/ponytail/blob/main/README.md).
 
 ## Author
 
